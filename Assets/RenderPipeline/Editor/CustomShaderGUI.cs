@@ -4,22 +4,15 @@ using UnityEditor.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-public class CustomShaderGUI : ShaderGUI {
-
-
-    MaterialEditor materialEditor;
-    MaterialProperty[] properties;
-    Material material;
-
-    static GUIContent staticLabel = new GUIContent();
-
-    public enum SurfaceType
+public class CustomShaderGUI : ShaderGUI
+{
+    enum SurfaceType
     {
         Opaque,
         Transparent
     }
 
-    public enum BlendMode
+    enum BlendType
     {
         Alpha,
         Premultiply,
@@ -27,71 +20,48 @@ public class CustomShaderGUI : ShaderGUI {
         Multiply
     }
 
-    MaterialProperty mainTex;
-    MaterialProperty baseColor;
-    MaterialProperty clipping;
-    MaterialProperty cutoff;
-    MaterialProperty surfaceType;
-    MaterialProperty blendMode;
+    static GUIContent s_Label = new GUIContent();
 
-    MaterialProperty metallic;
-    MaterialProperty smoothness;
+    MaterialEditor m_MaterialEditor;
+    MaterialProperty[] m_Properties;
+    Material m_Material;
 
-    SurfaceType surfaceTypeValue;
-    BlendMode blendModeValue;
+    // Properties
+    MaterialProperty m_MainTex;
+    MaterialProperty m_BaseColor;
+    MaterialProperty m_Clipping;
+    MaterialProperty m_Cutoff;
+    MaterialProperty m_SurfaceType;
+    MaterialProperty m_BlendType;
+
+    // Lit shader properties
+    MaterialProperty m_PreMultiplyAlpha;
+    MaterialProperty m_Metallic;
+    MaterialProperty m_Smoothness;
+
+    SurfaceType m_SurfaceTypeValue = SurfaceType.Opaque;
+    BlendType m_BlendTypeValue = BlendType.Alpha;
+
 
     public override void OnGUI(MaterialEditor materialEditor, MaterialProperty[] properties)
     {
-        Init(materialEditor, properties);
+        m_MaterialEditor = materialEditor;
+        m_Properties = properties;
+        m_Material = materialEditor.target as Material;
+        FindAllProperties();
 
-        DrawAlbedoGUI();
-
-        DrawEnum<SurfaceType>(MakeLabel(surfaceType), surfaceType, ref surfaceTypeValue);
-
+        DrawAlbedoAndTextureGUI();
         DrawSurfaceOptions();
-
         DrawClipping();
-
-        if (material.HasProperty("_Metallic"))
-        {
-            metallic.floatValue = materialEditor.RangeProperty(metallic, "Metallic");
-        }
-
-        if (material.HasProperty("_Smoothness"))
-        {
-            smoothness.floatValue = materialEditor.RangeProperty(smoothness, "Smoothness");
-        }
+        DrawMetallic();
+        DrawSmoothness();
     }
 
-    MaterialProperty FindProperty(string name)
-    {
-        if (material == null) return null;
-
-        if (material.HasProperty(name))
-        {
-            return ShaderGUI.FindProperty(name, properties);
-        }
-
-        return null;
-    }
-
-    void FindAllProperties()
-    {
-        mainTex = FindProperty("_MainTex");
-        baseColor = FindProperty("_BaseColor");
-        clipping = FindProperty("_Clipping");
-        cutoff = FindProperty("_Cutoff");
-        surfaceType = FindProperty("_SurfaceType");
-        blendMode = FindProperty("_BlendMode");
-
-        metallic = FindProperty("_Metallic");
-        smoothness = FindProperty("_Smoothness");
-    }
     static GUIContent MakeLabel(string text, string tooltip = null)
     {
-        staticLabel.text = text;
-        staticLabel.tooltip = tooltip;
-        return staticLabel;
+        s_Label.text = text;
+        s_Label.tooltip = tooltip;
+        return s_Label;
     }
 
     static GUIContent MakeLabel(MaterialProperty property, string tooltip = null)
@@ -99,107 +69,158 @@ public class CustomShaderGUI : ShaderGUI {
         return MakeLabel(property.displayName, tooltip);
     }
 
-    void SetMaterialSrcDstBlendProperties(UnityEngine.Rendering.BlendMode srcBlend, UnityEngine.Rendering.BlendMode dstBlend)
+    MaterialProperty FindProperty(string name)
     {
-        if (material.HasProperty("_SrcBlend"))
-            material.SetFloat("_SrcBlend", (float)srcBlend);
+        if (m_Material == null) return null;
 
-        if (material.HasProperty("_DstBlend"))
-            material.SetFloat("_DstBlend", (float)dstBlend);
-    }
-
-    void Init(MaterialEditor materialEditor, MaterialProperty[] properties)
-    {
-        this.materialEditor = materialEditor;
-        this.properties = properties;
-        material = materialEditor.target as Material;
-
-        FindAllProperties();
-
-        surfaceTypeValue = (SurfaceType)surfaceType.floatValue;
-        blendModeValue = (BlendMode)blendMode.floatValue;
-    }
-
-    void DrawAlbedoGUI()
-    {
-        materialEditor.TexturePropertySingleLine(MakeLabel("Albedo", "Set texture and base color."), mainTex, baseColor);
-        materialEditor.TextureScaleOffsetProperty(mainTex);
-    }
-
-    void DrawEnum<T>(GUIContent label, MaterialProperty prop, ref T enumValue) where T : Enum
-    {
-        if (prop != null)
+        if (m_Material.HasProperty(name))
         {
-            enumValue = (T)Enum.ToObject(typeof(T), (int)prop.floatValue);
-            materialEditor.PopupShaderProperty(prop, label, Enum.GetNames(typeof(T)));
+            return ShaderGUI.FindProperty(name, m_Properties);
         }
+
+        return null;
     }
 
+    void FindAllProperties()
+    {
+        m_MainTex = FindProperty("_MainTex");
+        m_BaseColor = FindProperty("_BaseColor");
+        m_Clipping = FindProperty("_Clipping");
+        m_Cutoff = FindProperty("_Cutoff");
+        m_SurfaceType = FindProperty("_SurfaceType");
+        m_BlendType = FindProperty("_BlendType");
+
+        m_PreMultiplyAlpha = FindProperty("_PremulAlpha");
+        m_Metallic = FindProperty("_Metallic");
+        m_Smoothness = FindProperty("_Smoothness");
+    }
+
+    void DrawAlbedoAndTextureGUI()
+    {
+        m_MaterialEditor.TexturePropertySingleLine(MakeLabel("Albedo"), m_MainTex, m_BaseColor);
+        m_MaterialEditor.TextureScaleOffsetProperty(m_MainTex);
+    }
+
+    void DrawEnumComboBox<T>(GUIContent label, MaterialProperty property, ref T value) where T : Enum
+    {
+        if (property == null) return;
+        value = (T)Enum.ToObject(typeof(T), (int)property.floatValue);
+        m_MaterialEditor.PopupShaderProperty(property, label, Enum.GetNames(typeof(T)));
+    }
+
+    void SetPremultiplyAlpha(bool value)
+    {
+        if (!m_Material.HasProperty("_PremulAlpha")) return;
+
+        if (value)
+            m_Material.EnableKeyword("PREMULTIPLY_ALPHA");
+        else
+            m_Material.DisableKeyword("PREMULTIPLY_ALPHA");
+    }
     void DrawSurfaceOptions()
     {
-        material.SetOverrideTag("RenderType", "");      // clear override tag
+        DrawEnumComboBox(MakeLabel("Surface Type"), m_SurfaceType, ref m_SurfaceTypeValue);
 
-        switch (surfaceTypeValue)
+        m_Material.SetOverrideTag("RenderType", ""); // Reset the render type
+        switch (m_SurfaceTypeValue)
         {
             case SurfaceType.Opaque:
-                material.SetFloat("_ZWrite", 1.0f);
-                SetMaterialSrcDstBlendProperties(UnityEngine.Rendering.BlendMode.One, UnityEngine.Rendering.BlendMode.Zero);
-                material.renderQueue = (int)RenderQueue.Geometry;
-                material.SetOverrideTag("RenderType", "Opaque");
-                material.DisableKeyword("ENABLE_CLIPPING");
+                m_Material.SetOverrideTag("RenderType", "Opaque");
+                m_Material.renderQueue = (int)RenderQueue.Geometry;
+                SetZWrite(true);
+                SetPremultiplyAlpha(false);
+                SetBlendProperties(BlendMode.One, BlendMode.Zero);
+                
+                
                 break;
             case SurfaceType.Transparent:
-                if (surfaceTypeValue == SurfaceType.Transparent)
+                m_Material.SetOverrideTag("RenderType", "Transparent");
+                m_Material.renderQueue = (int)RenderQueue.Transparent;
+                SetZWrite(false);
+                
+                DrawEnumComboBox(MakeLabel("Blend Type"), m_BlendType, ref m_BlendTypeValue);
+                switch (m_BlendTypeValue)
                 {
-                    material.SetOverrideTag("RenderType", "Transparent");
-                    material.renderQueue = (int)RenderQueue.Transparent;
-                    material.DisableKeyword("ENABLE_CLIPPING");
-                    material.SetFloat("_ZWrite", 0.0f);
-
-                    DrawEnum<BlendMode>(MakeLabel(blendMode), blendMode, ref blendModeValue);
-
-                    switch (blendModeValue)
-                    {
-                        case BlendMode.Alpha:
-                            SetMaterialSrcDstBlendProperties(UnityEngine.Rendering.BlendMode.SrcAlpha, UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                            break;
-                        case BlendMode.Premultiply:
-                            SetMaterialSrcDstBlendProperties(UnityEngine.Rendering.BlendMode.One, UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                            break;
-                        case BlendMode.Additive:
-                            SetMaterialSrcDstBlendProperties(UnityEngine.Rendering.BlendMode.SrcAlpha, UnityEngine.Rendering.BlendMode.One);
-                            break;
-                        case BlendMode.Multiply:
-                            SetMaterialSrcDstBlendProperties(UnityEngine.Rendering.BlendMode.DstColor, UnityEngine.Rendering.BlendMode.Zero);
-                            break;
-                    }
+                    case BlendType.Alpha:
+                        SetPremultiplyAlpha(false);
+                        SetBlendProperties(BlendMode.SrcAlpha, BlendMode.OneMinusSrcAlpha);
+                        break;
+                    case BlendType.Premultiply:
+                        SetPremultiplyAlpha(true);
+                        SetBlendProperties(BlendMode.One, BlendMode.OneMinusSrcAlpha);
+                        break;
+                    case BlendType.Additive:
+                        SetPremultiplyAlpha(false);
+                        SetBlendProperties(BlendMode.SrcAlpha, BlendMode.One);
+                        break;
+                    case BlendType.Multiply:
+                        SetPremultiplyAlpha(false);
+                        SetBlendProperties(BlendMode.DstColor, BlendMode.Zero);
+                        break;
                 }
                 break;
         }
+
     }
 
-    void DrawFloatToggleProperty(GUIContent styles, MaterialProperty prop)
+    void SetBlendProperties(BlendMode srcBlend, BlendMode dstBlend)
     {
-        if (prop == null)
-            return;
+        if (m_Material.HasProperty("_SrcBlend"))
+            m_Material.SetFloat("_SrcBlend", (float)srcBlend);
+
+        if (m_Material.HasProperty("_DstBlend"))
+            m_Material.SetFloat("_DstBlend", (float)dstBlend);
+    }
+
+    void SetZWrite(bool value)
+    {
+        if (m_Material.HasProperty("_ZWrite"))
+            m_Material.SetFloat("_ZWrite", value ? 1 : 0);
+    }
+
+    void DrawFloatToggle(GUIContent label, MaterialProperty property)
+    {
+        if (property == null) return;
 
         EditorGUI.BeginChangeCheck();
-        EditorGUI.showMixedValue = prop.hasMixedValue;
-        bool newValue = EditorGUILayout.Toggle(styles, prop.floatValue == 1);
+        EditorGUI.showMixedValue = property.hasMixedValue;
+        bool newValue = EditorGUILayout.Toggle(label, property.floatValue == 1);
         if (EditorGUI.EndChangeCheck())
-            prop.floatValue = newValue ? 1.0f : 0.0f;
+            property.floatValue = newValue ? 1.0f : 0.0f;
         EditorGUI.showMixedValue = false;
     }
 
     void DrawClipping()
     {
-        DrawFloatToggleProperty(MakeLabel(clipping), clipping);
-        if (clipping.floatValue == 1.0f)
+        DrawFloatToggle(MakeLabel(m_Clipping), m_Clipping);
+
+        if (m_Clipping.floatValue == 1f)
         {
-            cutoff.floatValue = materialEditor.RangeProperty(cutoff, "Cutoff");
-            material.renderQueue = (int)RenderQueue.AlphaTest;
-            material.SetOverrideTag("RenderType", "TransparentCutout");
-            CoreUtils.SetKeyword(material, "ENABLE_CLIPPING", clipping.floatValue == 1.0f);
+            m_Material.SetOverrideTag("RenderType", "TransparentCutout");
+            m_Material.EnableKeyword("CLIPPING");
+            m_Material.renderQueue = (int)RenderQueue.AlphaTest;
+            m_Cutoff.floatValue = m_MaterialEditor.RangeProperty(m_Cutoff, "Cutoff");
+            
+        }
+        else
+        {
+            m_Material.DisableKeyword("CLIPPING");
+        }
+    }
+
+    void DrawMetallic()
+    {
+        if (m_Material.HasProperty("_Metallic"))
+        {
+            m_Metallic.floatValue = m_MaterialEditor.RangeProperty(m_Metallic, "Metallic");
+        }
+    }
+
+    void DrawSmoothness()
+    {
+        if (m_Material.HasProperty("_Smoothness"))
+        {
+            m_Smoothness.floatValue = m_MaterialEditor.RangeProperty(m_Smoothness, "Smoothness");
         }
     }
 }
