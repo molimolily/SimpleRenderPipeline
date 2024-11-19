@@ -87,8 +87,6 @@ float4 LitPassFragment (Varyings input) : SV_TARGET {
 	#endif
     float3 bakedGI = SampleSH(surface.normal);
     float3 color = GetLighting(surface, brdf, bakedGI);
-	// half3 color = SampleSH(surface.normal);
-    // float3 color = GetLighting(surface, brdf) + SampleSH(surface.normal);
 	return float4(color, surface.alpha);
 }
 
