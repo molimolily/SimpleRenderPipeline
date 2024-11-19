@@ -9,8 +9,8 @@ float3 GetLighting (Surface surface, BRDF brdf, Light light) {
 	return IncomingLight(surface, light) * DirectBRDF(surface, brdf, light);
 }
 
-float3 GetLighting (Surface surface, BRDF brdf) {
-	float3 color = 0.0;
+float3 GetLighting (Surface surface, BRDF brdf, float3 bakedGI) {
+	float3 color = brdf.diffuse * bakedGI;
 	for (int i = 0; i < GetDirectionalLightCount(); i++) {
 		color += GetLighting(surface, brdf, GetDirectionalLight(i));
 	}

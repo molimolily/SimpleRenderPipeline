@@ -6,6 +6,7 @@
 #include "../ShaderLibrary/Light.hlsl"
 #include "../ShaderLibrary/BRDF.hlsl"
 #include "../ShaderLibrary/Lighting.hlsl"
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/SphericalHarmonics.hlsl"
 
 TEXTURE2D(_MainTex);
 SAMPLER(sampler_MainTex);
@@ -46,6 +47,21 @@ Varyings LitPassVertex (Attributes input) {
 	return output;
 }
 
+half3 SampleSH(half3 normalWS)
+{
+    // LPPV is not supported in Ligthweight Pipeline
+    real4 SHCoefficients[7];
+    SHCoefficients[0] = unity_SHAr;
+    SHCoefficients[1] = unity_SHAg;
+    SHCoefficients[2] = unity_SHAb;
+    SHCoefficients[3] = unity_SHBr;
+    SHCoefficients[4] = unity_SHBg;
+    SHCoefficients[5] = unity_SHBb;
+    SHCoefficients[6] = unity_SHC;
+
+    return max(half3(0, 0, 0), SampleSH9(SHCoefficients, normalWS));
+}
+
 float4 LitPassFragment (Varyings input) : SV_TARGET {
 	UNITY_SETUP_INSTANCE_ID(input);
 	float4 MainTex = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.baseUV);
@@ -69,7 +85,10 @@ float4 LitPassFragment (Varyings input) : SV_TARGET {
 	#else
 		BRDF brdf = GetBRDF(surface);
 	#endif
-	float3 color = GetLighting(surface, brdf);
+    float3 bakedGI = SampleSH(surface.normal);
+    float3 color = GetLighting(surface, brdf, bakedGI);
+	// half3 color = SampleSH(surface.normal);
+    // float3 color = GetLighting(surface, brdf) + SampleSH(surface.normal);
 	return float4(color, surface.alpha);
 }
 

@@ -75,6 +75,7 @@ public partial class SimpleRenderer
 
         DrawingSettings drawingSettings = new DrawingSettings(s_unlitShaderTagId, sortingSettings);
         drawingSettings.SetShaderPassName(1, s_litShaderTagId);
+        drawingSettings.perObjectData = PerObjectData.LightProbe;
 
         FilteringSettings filteringSettings = new FilteringSettings(RenderQueueRange.opaque);
 
